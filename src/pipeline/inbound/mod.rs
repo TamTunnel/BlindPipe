@@ -4,7 +4,7 @@ pub mod unicode;
 
 use crate::utils::json_walker::StringProcessor;
 use crate::vault::Vault;
-use metadata::strip_metadata;
+use metadata::MetadataStripper;
 use statistical::disrupt_watermark;
 use std::future::Future;
 use std::pin::Pin;
@@ -32,7 +32,7 @@ impl<'a> StringProcessor for SessionInbound<'a> {
             let mut text = self.pipeline.vault.desanitize(self.session_id, s).await;
             text = clean_unicode(&text);
             text = disrupt_watermark(&text);
-            text = strip_metadata(&text);
+            text = MetadataStripper::strip_metadata(&text);
             text
         })
     }

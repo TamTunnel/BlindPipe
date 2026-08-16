@@ -184,6 +184,11 @@ async fn proxy_handler(
                     resp_vec = new_body;
                 }
             }
+        } else if res_content_type.contains("image/") || 
+                  res_content_type.contains("application/pdf") || 
+                  res_content_type.contains("application/vnd.openxmlformats") || 
+                  res_content_type.contains("application/epub+zip") {
+            resp_vec = blindpipe::pipeline::inbound::metadata::MetadataStripper::strip_binary(&resp_vec, &res_content_type);
         } else if !resp_vec.is_empty() {
             if let Ok(text) = String::from_utf8(resp_vec.clone()) {
                 use std::future::Future;

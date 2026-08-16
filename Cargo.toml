@@ -26,6 +26,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 anyhow = "1.0"
 thiserror = "1.0"
 uuid = { version = "1", features = ["v4", "fast-rng"] }
+zip = { version = "2.2", default-features = false, features = ["deflate"] }
+lopdf = { version = "0.34", default-features = false }
+base64 = "0.22"
 
 [features]
 default = ["ner"]
