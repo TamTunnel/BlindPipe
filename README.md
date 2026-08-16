@@ -138,6 +138,64 @@ curl http://localhost:8080/v1/images/generations \
 # BlindPipe intercepts the b64_json field, strips C2PA/EXIF chunks in memory, and returns clean Base64.
 ```
 
+### IDE & Developer Tool Integrations
+
+BlindPipe operates as a transparent Layer 7 proxy. You do not need to install custom plugins, load prompt skills, or configure agent tools. Simply point your tool's **Base URL** to BlindPipe.
+
+#### Cursor IDE
+1. Open **Cursor Settings** (`Cmd + Shift + J` or `Ctrl + Shift + J`).
+2. Navigate to **Models** → **OpenAI API Key** (or custom endpoint).
+3. Toggle **Override OpenAI Base URL** and enter:
+   ```text
+   http://localhost:8080/v1
+   ```
+4. Enter your upstream API key in the key field (BlindPipe forwards authorization headers transparently).
+
+#### VS Code Extensions (Cline / Roo Code / Continue.dev)
+1. Open extension settings.
+2. Set **API Provider** to `OpenAI Compatible` (or `Anthropic Compatible`).
+3. Set **Base URL** to `http://localhost:8080/v1`.
+4. Enter your real upstream provider API key.
+
+#### Terminal Coding Agents (Aider / OpenDevin / Goose)
+Pass standard environment variables directly in your shell:
+
+```bash
+# OpenAI / OpenRouter
+export OPENAI_BASE_URL="http://localhost:8080/v1"
+export OPENAI_API_KEY="sk-..."
+
+# Anthropic
+export ANTHROPIC_BASE_URL="http://localhost:8080"
+export ANTHROPIC_API_KEY="sk-ant-..."
+
+# Launch agent
+aider
+```
+
+#### Python / TypeScript SDKs
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:8080/v1",
+    api_key="your-api-key"
+)
+```
+
+## Why BlindPipe (L7 Proxy) vs. Prompt Skills (`skills.md`)
+
+| Feature / Metric | Agent Skill (`skills.md` / Tools) | BlindPipe (L7 Network Proxy) |
+| :--- | :--- | :--- |
+| **Context Window Overhead** | Consumes **500–1,500 prompt tokens** on every turn | **0 tokens** (Operates entirely outside the context window) |
+| **Enforcement Reliability** | **Probabilistic** (Model may hallucinate, skip tool calls, or ignore instructions) | **100% Deterministic** (Hard network-level byte filtering) |
+| **Outbound PII Protection** | **None** (Prompts and secrets leave plaintext before the skill runs) | **Full-Duplex** (Masks outbound PII *before* leaving localhost) |
+| **Inbound Watermark Hygiene** | Requires manual post-generation re-prompting or tool execution | **Automatic** (Strips zero-width tags & C2PA inline on stream deltas) |
+| **Compatibility** | Locked to specific agent platforms supporting that skill syntax | **Universal** (Works with Cursor, Cline, Aider, SDKs, cURL) |
+| **Prompt Injection Risk** | Vulnerable to context poisoning and adversarial prompt override | **Immune** (Runs in compiled Rust runtime outside the LLM sandbox) |
+| **Streaming Latency** | High (Must buffer full completion before invoking Python tool) | **Sub-4ms P99** (SIMD-accelerated real-time SSE chunk pipeline) |
+
 ## Configuration
 
 | Variable | Description | Default |
