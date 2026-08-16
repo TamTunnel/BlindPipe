@@ -9,8 +9,8 @@ lazy_static::lazy_static! {
     static ref SVG_META_RE: regex::bytes::Regex = regex::bytes::Regex::new(r"(?is)<metadata.*?</metadata>").unwrap();
     static ref SVG_RDF_RE: regex::bytes::Regex = regex::bytes::Regex::new(r"(?is)<rdf:RDF.*?</rdf:RDF>").unwrap();
     static ref XML_COMMENT_RE: regex::bytes::Regex = regex::bytes::Regex::new(r"(?is)<!--.*?-->").unwrap();
-    static ref HTML_META_GEN_RE: regex::bytes::Regex = regex::bytes::Regex::new(r"(?is)<meta\s+name=(['\x22])(generator|author)\1[^>]*>").unwrap();
-    static ref HTML_DATA_AI_RE: regex::bytes::Regex = regex::bytes::Regex::new(r"(?is)\s+data-ai-[a-zA-Z0-9\-]+=(['\x22])[^\1]*?\1").unwrap();
+    static ref HTML_META_GEN_RE: regex::bytes::Regex = regex::bytes::Regex::new(r"(?is)<meta\s+name=['\x22]?(?:generator|author)['\x22]?[^>]*>").unwrap();
+    static ref HTML_DATA_AI_RE: regex::bytes::Regex = regex::bytes::Regex::new(r"(?is)\s+data-ai-[a-zA-Z0-9\-]+=(?:'[^']*'|\x22[^\x22]*\x22|[^\s>]+)").unwrap();
     static ref MD_FRONTMATTER_RE: regex::bytes::Regex = regex::bytes::Regex::new(r"(?s)\A(?:---[\r\n]+.*?[\r\n]+---|^\+\+\+[\r\n]+.*?[\r\n]+\+\+\+)[\r\n]*").unwrap();
 }
 
