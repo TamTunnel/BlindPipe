@@ -1,53 +1,39 @@
-FROM python:3.11-slim-bookworm AS builder
+# Stage 1: Builder
+FROM rust:1.80-slim-bookworm AS builder
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
+WORKDIR /usr/src/app
 
-WORKDIR /build
+# Install dependencies for ort and compiling
+RUN apt-get update && apt-get install -y pkg-config libssl-dev curl ca-certificates && rm -rf /var/lib/apt/lists/*
 
-# Fast CPU-optimized torch installation (~150MB vs ~900MB for default GPU PyPI wheel)
-RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch
+# Download Model and Tokenizer during build so it's cached in the image
+COPY scripts/download_model.sh ./scripts/
+RUN chmod +x ./scripts/download_model.sh && ./scripts/download_model.sh dslim/bert-base-NER
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Create a dummy main to cache dependencies
+RUN mkdir src && echo "fn main() {}" > src/main.rs
+COPY Cargo.toml ./
+RUN cargo fetch
+RUN cargo build --release
+RUN rm src/main.rs
 
-# Download and bake GLiNER model
-COPY download_model.py .
-RUN mkdir -p /app/models/gliner && python download_model.py
+# Build the real app
+COPY src/ ./src/
+COPY tests/ ./tests/
+RUN cargo build --release
 
-
-FROM python:3.11-slim-bookworm
-
-# Copy installed packages from builder
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
-
-# Copy baked model
-COPY --from=builder /app/models/gliner /app/models/gliner
+# Stage 2: Runtime (Distroless)
+FROM gcr.io/distroless/cc-debian12
 
 WORKDIR /app
 
-# Create non-root user
-RUN groupadd -g 10001 appgroup && \
-    useradd -u 10001 -g appgroup -s /bin/bash -m appuser
+COPY --from=builder /usr/src/app/target/release/promptveil /app/promptveil
+COPY --from=builder /usr/src/app/models /app/models
 
-# Copy application code
-COPY app/ ./app/
-COPY config.yaml .
-
-# Set permissions
-RUN chown -R appuser:appgroup /app
-
-USER appuser
+ENV SERVER_PORT=8080
+ENV GLINER_MODEL_PATH=/app/models
+ENV RUST_LOG=info
 
 EXPOSE 8080
 
-ENV GLINER_MODEL_PATH="/app/models/gliner"
-ENV PYTHONPATH="/app"
-
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')" || exit 1
-
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "2"]
+CMD ["/app/promptveil"]

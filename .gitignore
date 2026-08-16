@@ -1,1 +1,5 @@
-.venv/
+/target
+/models
+**/*.rs.bk
+*.onnx
+*.partial

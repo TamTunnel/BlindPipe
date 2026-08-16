@@ -5,16 +5,19 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: promptveil:latest
-    container_name: promptveil
     ports:
       - "8080:8080"
     environment:
-      - LOG_LEVEL=INFO
+      - SERVER_PORT=8080
+      - UPSTREAM_BASE_URL=https://api.openai.com
+      - ENABLE_REGEX_TIER=true
+      - ENABLE_NER_TIER=true
+      - NER_THRESHOLD=0.45
+      - SESSION_TTL_SECONDS=3600
+      - RUST_LOG=info
+    # Restrict memory as Rust uses <40MB normally
     deploy:
       resources:
         limits:
-          cpus: '2.0'
-          memory: 2G
+          memory: 256M
     restart: unless-stopped
-    read_only: false # Set to true in prod if caching is externalized
