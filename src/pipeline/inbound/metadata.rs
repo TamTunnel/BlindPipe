@@ -284,16 +284,14 @@ impl MetadataStripper {
             Err(_) => return None,
         };
         
-        if let Ok(root_id) = doc.catalog() {
-            if let Ok(catalog) = doc.get_dictionary_mut(root_id) {
-                catalog.remove(b"Metadata");
-                catalog.remove(b"PieceInfo");
-            }
+        if let Ok(catalog) = doc.catalog_mut() {
+            catalog.remove(b"Metadata");
+            catalog.remove(b"PieceInfo");
         }
         
         if let Ok(info_id) = doc.trailer.get(b"Info").and_then(|obj| obj.as_reference()) {
             if let Ok(info) = doc.get_dictionary_mut(info_id) {
-                let keys = [b"Author", b"Creator", b"Producer", b"CreationDate", b"ModDate"];
+                let keys: [&[u8]; 5] = [b"Author", b"Creator", b"Producer", b"CreationDate", b"ModDate"];
                 for &key in &keys {
                     if info.has(key) {
                         info.set(key.to_vec(), Object::String(b"".to_vec(), lopdf::StringFormat::Literal));
