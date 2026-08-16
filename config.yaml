@@ -1,0 +1,23 @@
+server:
+  host: "0.0.0.0"
+  port: 8080
+  workers: 2
+
+upstream:
+  default_base_url: "https://api.openai.com"
+  timeout_seconds: 60.0
+
+engine:
+  model_name: "urchade/gliner_multi_pii-v1"
+  ner_threshold: 0.45
+  labels:
+    - "person"
+    - "email address"
+    - "phone number"
+    - "organization"
+    - "address"
+  enable_regex_tier: true
+
+vault:
+  session_ttl_seconds: 3600
+  max_sessions: 10000

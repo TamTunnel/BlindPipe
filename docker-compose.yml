@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  promptveil:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: promptveil:latest
+    container_name: promptveil
+    ports:
+      - "8080:8080"
+    environment:
+      - LOG_LEVEL=INFO
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+    restart: unless-stopped
+    read_only: false # Set to true in prod if caching is externalized
