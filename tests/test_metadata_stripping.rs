@@ -113,7 +113,7 @@ fn test_pdf_stripping() {
         }
     }
     
-    let clean_root = clean_doc.get_dictionary(clean_doc.catalog().unwrap()).unwrap();
+    let clean_root = clean_doc.catalog().unwrap();
     assert!(!clean_root.has(b"Metadata"));
 }
 
