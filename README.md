@@ -41,6 +41,16 @@ graph LR
 
 ## Quickstart
 
+You can run BlindPipe directly using the pre-built Docker image, or build it locally from source.
+
+### Option 1: Use Pre-built Image (Recommended)
+```bash
+docker run -d -p 8080:8080 \
+  -e BLINDPIPE_UPSTREAM_URL=https://api.openai.com \
+  ghcr.io/tamtunnel/blindpipe:latest
+```
+
+### Option 2: Build Locally (For Power Users)
 ```bash
 git clone https://github.com/TamTunnel/BlindPipe.git
 cd BlindPipe
