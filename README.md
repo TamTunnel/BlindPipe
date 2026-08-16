@@ -4,7 +4,8 @@
 [![Rust 1.80+](https://img.shields.io/badge/rust-1.80+-orange.svg)](https://www.rust-lang.org)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-**BlindPipe** is a high-performance, full-duplex Layer 7 AI privacy proxy written in Rust. It enforces a bidirectional zero-trust perimeter for AI applications, ensuring that sensitive data is masked before reaching external LLMs, and responses are scrubbed of tracking/watermarks before reaching end-users.
+> `🔒 High-performance, full-duplex Layer 7 AI privacy gateway in Rust. Redacts outbound PII/credentials and purges inbound zero-width tracking characters, SynthID watermarks, and C2PA/EXIF metadata across 13 image, document, and markup formats.`
+
 **BlindPipe is provider agnostic and hence can work with any LLM provider with their upstream API URL.**
 
 ## The Problem: Bi-Directional AI Surveillance
@@ -12,9 +13,11 @@
 1. **Outbound Data Exfiltration:** Sending proprietary code, credentials, and customer PII to cloud LLMs violates compliance (GDPR/HIPAA/SOC2) and exposes sensitive data to external logging.
 2. **Inbound Traceability & Synthetic Watermarks:** Major AI providers (Anthropic, Google, OpenAI) are rolling out traceable markers—including statistical n-gram biasing (SynthID, Kirchenbauer green-lists), zero-width Unicode characters, bidi overrides, and C2PA metadata—to comply with regulatory mandates (such as the EU AI Act). These invisible signatures embed persistent provenance into generated text, code, and documents, allowing third parties to trace and fingerprint your outputs.
 
+*AI providers and enterprise agents embed persistent provenance markers (C2PA JUMBF containers, EXIF/XMP headers, `/Metadata` streams, and `docProps/` archives) into generated images, code artifacts, and exported files, allowing permanent lineage tracking and device attribution.*
+
 ## The Solution: BlindPipe
 
-**BlindPipe** acts as an invisible, full-duplex Layer 7 security boundary:
+**BlindPipe** acts as an invisible, full-duplex Layer 7 security boundary. BlindPipe inspects both streaming text and inline Base64 / binary media on the fly without writing files to disk:
 * **Outbound (Client → LLM):** Intercepts requests, redacts PII and credentials using high-speed deterministic regex and local ONNX NER, and stores mappings in an ephemeral, in-memory vault.
 * **Inbound (LLM → Client):** Re-hydrates original PII while simultaneously stripping zero-width tracking characters, normalizing Unicode homoglyphs, disrupting statistical watermark distributions, and purging provenance metadata in real time with $< 4\text{ms}$ latency overhead.
 
@@ -29,6 +32,17 @@ graph LR
 ```
 
 ## Features
+
+### Supported Formats & Stripping Matrix
+
+| Category | Formats | Stripped Signatures & Provenance Markers | Technical Engine |
+| :--- | :--- | :--- | :--- |
+| **Text Streams** | `text/plain`, `text/event-stream` | Zero-width spaces (`\u{200B}`–`\u{FEFF}`), Bidi overrides, Tag plane (`\u{E0000}`), SynthID n-gram biases | Zero-allocation character filter + Lexical perturbation |
+| **Raster Images** | **PNG, JPEG, WebP, GIF, BMP, TIFF** | `caTX` (C2PA), `APP11` (JUMBF boxes), `APP1` (EXIF/XMP), `eXIf`, `iTXt`, comment extensions | Zero-copy byte marker / chunk filter |
+| **Vector Images** | **SVG** | `<metadata>`, `<rdf:RDF>`, C2PA tags, XML comments | XML AST / Regex sanitizer |
+| **Documents** | **PDF** | `/Metadata` object streams, `/PieceInfo`, `/Info` dictionary attribution (`/Author`, `/Creator`, `/Producer`) | Pure-Rust `lopdf` AST nullifier |
+| **Containers** | **DOCX, EPUB, ODT** | `docProps/core.xml`, `docProps/app.xml`, `docProps/custom.xml`, `meta.xml`, embedded C2PA manifests | In-memory `zip` archive repacker |
+| **Markup** | **HTML, Markdown** | `<meta name="generator">`, `<meta name="author">`, `data-ai-*` tracking attributes, YAML/TOML frontmatter | Streaming markup parser |
 
 1. **Outbound Masking (Zero-Trust Privacy):**
    - **Tier 1:** Deterministic regex matching for SSNs, Credit Cards, API Keys, IPs.
@@ -111,6 +125,17 @@ docker run -d -p 8080:8080 -e BLINDPIPE_UPSTREAM_URL=http://host.docker.internal
 curl -X POST http://localhost:8080/api/generate \
   -H "Content-Type: application/json" \
   -d '{"model": "llama3", "prompt": "My IP address is 192.168.1.100", "stream": false}'
+```
+
+### Inline Base64 & Multipart Verification Example
+
+```bash
+# Example: Sending a request that generates an inline image/artifact
+curl http://localhost:8080/v1/images/generations \
+  -H "Authorization: Bearer $OPENAI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "A modern logo design", "response_format": "b64_json"}'
+# BlindPipe intercepts the b64_json field, strips C2PA/EXIF chunks in memory, and returns clean Base64.
 ```
 
 ## Configuration
