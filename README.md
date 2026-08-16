@@ -1,5 +1,9 @@
 # BlindPipe
 
+[![Build and Test](https://github.com/TamTunnel/BlindPipe/actions/workflows/docker-build.yml/badge.svg)](https://github.com/TamTunnel/BlindPipe/actions/workflows/docker-build.yml)
+[![Rust 1.80+](https://img.shields.io/badge/rust-1.80+-orange.svg)](https://www.rust-lang.org)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
 **BlindPipe** is a high-performance, full-duplex Layer 7 AI privacy proxy written in Rust. It enforces a bidirectional zero-trust perimeter for AI applications, ensuring that sensitive data is masked before reaching external LLMs, and responses are scrubbed of tracking/watermarks before reaching end-users.
 
 ## The Problem: Bi-Directional AI Surveillance
