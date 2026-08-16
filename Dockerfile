@@ -6,10 +6,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
+
+# Fast CPU-optimized torch installation (~150MB vs ~900MB for default GPU PyPI wheel)
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Download and bake model
+# Download and bake GLiNER model
 COPY download_model.py .
 RUN mkdir -p /app/models/gliner && python download_model.py
 

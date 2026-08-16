@@ -2,7 +2,7 @@
 ### Zero-Trust PII Obfuscating AI Gateway Proxy
 
 [![Build and Test Docker Image](https://github.com/TamTunnel/PromptVeil/actions/workflows/docker-build.yml/badge.svg)](https://github.com/TamTunnel/PromptVeil/actions/workflows/docker-build.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/Framework-FastAPI-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Docker](https://img.shields.io/badge/Container-Docker-2496ED.svg?logo=docker&logoColor=white)](https://www.docker.com/)
@@ -228,4 +228,4 @@ We welcome contributions from the community!
 
 ## 📄 License
 
-Distributed under the MIT License. See `LICENSE` for more information.
+Distributed under the Apache 2.0 License. See [LICENSE](LICENSE) for more information.
