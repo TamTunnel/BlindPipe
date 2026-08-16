@@ -1,4 +1,4 @@
-use promptveil::vault::Vault;
+use blindpipe::vault::Vault;
 
 #[tokio::test]
 async fn test_tokenize_and_desanitize() {

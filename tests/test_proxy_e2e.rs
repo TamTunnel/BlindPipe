@@ -1,6 +1,8 @@
-use promptveil::config::Config;
-use promptveil::sanitizer::Sanitizer;
-use promptveil::vault::Vault;
+use blindpipe::config::Config;
+use blindpipe::pipeline::outbound::{OutboundPipeline, SessionOutbound};
+use blindpipe::pipeline::inbound::{InboundPipeline, SessionInbound};
+use blindpipe::utils::json_walker::walk_json;
+use blindpipe::vault::Vault;
 use serde_json::json;
 use std::sync::Arc;
 
@@ -11,7 +13,8 @@ async fn test_sanitizer_json_walk_and_desanitize() {
     config.enable_ner_tier = false; // Disable NER in unit test to avoid needing local model download
 
     let vault = Arc::new(Vault::new(3600));
-    let sanitizer = Sanitizer::new(vault.clone(), &config);
+    let outbound = OutboundPipeline::new(vault.clone(), &config);
+    let inbound = InboundPipeline::new(vault.clone());
 
     let session_id = "test-session-123";
 
@@ -26,7 +29,11 @@ async fn test_sanitizer_json_walk_and_desanitize() {
     });
 
     // 1. Sanitize payload
-    sanitizer.walk_and_sanitize(&mut payload, session_id).await;
+    let processor_out = SessionOutbound {
+        pipeline: &outbound,
+        session_id,
+    };
+    walk_json(&mut payload, &processor_out).await;
 
     let content = payload["messages"][0]["content"].as_str().unwrap();
     assert!(content.contains("<IPV4_ADDRESS_1>"));
@@ -48,7 +55,11 @@ async fn test_sanitizer_json_walk_and_desanitize() {
     });
 
     // 3. Desanitize AI response
-    sanitizer.walk_and_desanitize(&mut ai_response, session_id).await;
+    let processor_in = SessionInbound {
+        pipeline: &inbound,
+        session_id,
+    };
+    walk_json(&mut ai_response, &processor_in).await;
 
     let reply_content = ai_response["choices"][0]["message"]["content"].as_str().unwrap();
     assert_eq!(

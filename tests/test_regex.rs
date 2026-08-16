@@ -1,4 +1,4 @@
-use promptveil::sanitizer::regex_engine::{RegexEngine, is_luhn_valid};
+use blindpipe::pipeline::outbound::regex_engine::{RegexEngine, is_luhn_valid};
 
 #[test]
 fn test_luhn_validation() {
