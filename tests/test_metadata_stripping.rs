@@ -81,7 +81,7 @@ fn test_docx_stripping() {
     let mut archive = zip::ZipArchive::new(std::io::Cursor::new(&stripped)).unwrap();
     let file_names: Vec<String> = (0..archive.len()).map(|i| archive.by_index(i).unwrap().name().to_string()).collect();
     
-    assert!(!file_names.contains(&"docProps/core.xml".to_string()));
+    assert!(!file_names.contains(&"docProps/core.xml".to_string()), "Files in zip: {:?}", file_names);
     assert!(file_names.contains(&"word/document.xml".to_string()));
 }
 
