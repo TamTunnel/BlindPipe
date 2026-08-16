@@ -18,7 +18,7 @@ pub struct MetadataStripper;
 
 impl MetadataStripper {
     pub fn strip_binary(bytes: &[u8], content_type: &str) -> Vec<u8> {
-        let magic = if bytes.len() > 8 { &bytes[0..8] } else { bytes };
+        let magic = if bytes.len() >= 8 { &bytes[0..8] } else { bytes };
         
         if content_type.contains("image/png") || magic.starts_with(b"\x89PNG\r\n\x1a\n") {
             return Self::strip_png(bytes).unwrap_or_else(|| bytes.to_vec());
@@ -32,12 +32,12 @@ impl MetadataStripper {
             return Self::strip_tiff(bytes).unwrap_or_else(|| bytes.to_vec());
         } else if content_type.contains("image/bmp") || magic.starts_with(b"BM") {
             return Self::strip_bmp(bytes).unwrap_or_else(|| bytes.to_vec());
-        } else if content_type.contains("image/svg") || content_type.contains("xml") || magic.starts_with(b"<?xml") || magic.starts_with(b"<svg") {
+        } else if content_type.contains("image/svg") || content_type == "text/xml" || content_type == "application/xml" || magic.starts_with(b"<?xml") || magic.starts_with(b"<svg") {
             return Self::strip_svg(bytes);
         } else if content_type.contains("application/pdf") || magic.starts_with(b"%PDF") {
             return Self::strip_pdf(bytes).unwrap_or_else(|| bytes.to_vec());
         } else if content_type.contains("application/zip") || content_type.contains("application/vnd.openxmlformats") || content_type.contains("application/epub+zip") {
-            return Self::strip_zip(bytes).expect("Zip stripping failed");
+            return Self::strip_zip(bytes).unwrap_or_else(|_| bytes.to_vec());
         } else if content_type.contains("text/html") || magic.starts_with(b"<!DOC") || magic.starts_with(b"<html") {
             return Self::strip_html(bytes);
         } else if content_type.contains("text/markdown") || content_type.contains("text/plain") {
