@@ -64,9 +64,9 @@ fn test_jpeg_stripping() {
 
 #[test]
 fn test_docx_stripping() {
-    let mut zip_buf = Vec::new();
+    let mut zip_cursor = std::io::Cursor::new(Vec::new());
     {
-        let mut zip = zip::ZipWriter::new(std::io::Cursor::new(&mut zip_buf));
+        let mut zip = zip::ZipWriter::new(&mut zip_cursor);
         let options = SimpleFileOptions::default();
         zip.start_file("docProps/core.xml", options).unwrap();
         zip.write_all(b"<core>metadata</core>").unwrap();
@@ -75,6 +75,7 @@ fn test_docx_stripping() {
         zip.finish().unwrap();
     }
     
+    let zip_buf = zip_cursor.into_inner();
     let stripped = MetadataStripper::strip_binary(&zip_buf, "application/vnd.openxmlformats");
     
     let mut archive = zip::ZipArchive::new(std::io::Cursor::new(&stripped)).unwrap();

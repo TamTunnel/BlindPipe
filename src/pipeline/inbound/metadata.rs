@@ -245,10 +245,10 @@ impl MetadataStripper {
     fn strip_zip(bytes: &[u8]) -> Option<Vec<u8>> {
         let reader = Cursor::new(bytes);
         let mut archive = ZipArchive::new(reader).ok()?;
-        let mut out_buf = Vec::new();
+        let mut out_cursor = Cursor::new(Vec::new());
         
         {
-            let mut writer = ZipWriter::new(Cursor::new(&mut out_buf));
+            let mut writer = ZipWriter::new(&mut out_cursor);
             let options = SimpleFileOptions::default();
             
             for i in 0..archive.len() {
@@ -272,7 +272,7 @@ impl MetadataStripper {
             }
             writer.finish().ok()?;
         }
-        Some(out_buf)
+        Some(out_cursor.into_inner())
     }
 
     // ---------------------------------------------
@@ -284,14 +284,14 @@ impl MetadataStripper {
             Err(_) => return None,
         };
         
-        if let Some(root_id) = doc.catalog() {
+        if let Ok(root_id) = doc.catalog() {
             if let Ok(catalog) = doc.get_dictionary_mut(root_id) {
                 catalog.remove(b"Metadata");
                 catalog.remove(b"PieceInfo");
             }
         }
         
-        if let Some(info_id) = doc.trailer.get(b"Info").and_then(|obj| obj.as_reference().ok()) {
+        if let Ok(info_id) = doc.trailer.get(b"Info").and_then(|obj| obj.as_reference()) {
             if let Ok(info) = doc.get_dictionary_mut(info_id) {
                 let keys = [b"Author", b"Creator", b"Producer", b"CreationDate", b"ModDate"];
                 for &key in &keys {
