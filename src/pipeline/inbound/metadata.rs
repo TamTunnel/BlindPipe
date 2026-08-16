@@ -36,8 +36,8 @@ impl MetadataStripper {
             return Self::strip_svg(bytes);
         } else if content_type.contains("application/pdf") || magic.starts_with(b"%PDF") {
             return Self::strip_pdf(bytes).unwrap_or_else(|| bytes.to_vec());
-        } else if content_type.contains("application/zip") || content_type.contains("application/epub") || content_type.contains("application/vnd.openxmlformats") || magic.starts_with(b"PK\x03\x04") {
-            return Self::strip_zip(bytes).unwrap_or_else(|| bytes.to_vec());
+        } else if content_type.contains("application/zip") || content_type.contains("application/vnd.openxmlformats") || content_type.contains("application/epub+zip") {
+            return Self::strip_zip(bytes).expect("Zip stripping failed");
         } else if content_type.contains("text/html") || magic.starts_with(b"<!DOC") || magic.starts_with(b"<html") {
             return Self::strip_html(bytes);
         } else if content_type.contains("text/markdown") || content_type.contains("text/plain") {
@@ -242,9 +242,9 @@ impl MetadataStripper {
     // ---------------------------------------------
     // ZIP / DOCX / EPUB / ODT
     // ---------------------------------------------
-    fn strip_zip(bytes: &[u8]) -> Option<Vec<u8>> {
+    fn strip_zip(bytes: &[u8]) -> Result<Vec<u8>, zip::result::ZipError> {
         let reader = Cursor::new(bytes);
-        let mut archive = ZipArchive::new(reader).ok()?;
+        let mut archive = ZipArchive::new(reader)?;
         let mut out_cursor = Cursor::new(Vec::new());
         
         {
@@ -264,15 +264,15 @@ impl MetadataStripper {
                         if writer.start_file(&name, options).is_ok() {
                             let mut buf = Vec::new();
                             if file.read_to_end(&mut buf).is_ok() {
-                                let _ = writer.write_all(&buf);
+                                writer.write_all(&buf)?;
                             }
                         }
                     }
                 }
             }
-            writer.finish().ok()?;
+            writer.finish()?;
         }
-        Some(out_cursor.into_inner())
+        Ok(out_cursor.into_inner())
     }
 
     // ---------------------------------------------
