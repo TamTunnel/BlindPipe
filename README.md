@@ -57,11 +57,59 @@ cd BlindPipe
 docker-compose up -d
 ```
 
-Send a request:
+### Schema-Agnostic Engine
+BlindPipe uses a recursive JSON walker that processes arbitrary payload structures without manual schema configuration. This makes it intrinsically compatible with **any** REST or SSE LLM provider out-of-the-box.
+
+### Sending Requests (Multi-Provider Examples)
+
+BlindPipe is completely provider-agnostic. Just set `BLINDPIPE_UPSTREAM_URL` to your provider's base endpoint and pass their specific headers through the proxy.
+
+**OpenAI:**
 ```bash
+# Start proxy pointing to OpenAI
+docker run -d -p 8080:8080 -e BLINDPIPE_UPSTREAM_URL=https://api.openai.com ghcr.io/tamtunnel/blindpipe:latest
+
+# Send request
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $OPENAI_API_KEY" \
   -d '{"model": "gpt-4", "messages": [{"role": "user", "content": "My social security number is 123-45-6789."}]}'
+```
+
+**Anthropic (Claude):**
+```bash
+# Start proxy pointing to Anthropic
+docker run -d -p 8080:8080 -e BLINDPIPE_UPSTREAM_URL=https://api.anthropic.com ghcr.io/tamtunnel/blindpipe:latest
+
+# Send request
+curl -X POST http://localhost:8080/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: $ANTHROPIC_API_KEY" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{"model": "claude-3-opus-20240229", "max_tokens": 1024, "messages": [{"role": "user", "content": "My secret key is sk-12345678901234567890123456789012"}]}'
+```
+
+**OpenRouter:**
+```bash
+# Start proxy pointing to OpenRouter
+docker run -d -p 8080:8080 -e BLINDPIPE_UPSTREAM_URL=https://openrouter.ai ghcr.io/tamtunnel/blindpipe:latest
+
+# Send request
+curl -X POST http://localhost:8080/api/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+  -d '{"model": "meta-llama/llama-3-8b-instruct:free", "messages": [{"role": "user", "content": "My email is user@example.com."}]}'
+```
+
+**Local Ollama:**
+```bash
+# Start proxy pointing to local Ollama (assuming it's on the host machine)
+docker run -d -p 8080:8080 -e BLINDPIPE_UPSTREAM_URL=http://host.docker.internal:11434 ghcr.io/tamtunnel/blindpipe:latest
+
+# Send request
+curl -X POST http://localhost:8080/api/generate \
+  -H "Content-Type: application/json" \
+  -d '{"model": "llama3", "prompt": "My IP address is 192.168.1.100", "stream": false}'
 ```
 
 ## Configuration
