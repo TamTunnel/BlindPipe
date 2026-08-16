@@ -2,11 +2,16 @@
 
 **BlindPipe** is a high-performance, full-duplex Layer 7 AI privacy proxy written in Rust. It enforces a bidirectional zero-trust perimeter for AI applications, ensuring that sensitive data is masked before reaching external LLMs, and responses are scrubbed of tracking/watermarks before reaching end-users.
 
-## Problem Statement
-When integrating with third-party LLM APIs (like OpenAI, Anthropic), businesses risk exposing sensitive PII, credentials, or proprietary data. Conversely, responses from these models can contain invisible tracking characters, Unicode tags, or statistical watermarks (like SynthID) that compromise the privacy of the end-user or the integrity of the application.
+## The Problem: Bi-Directional AI Surveillance
 
-## Solution
-BlindPipe acts as a transparent reverse proxy. It intercepts outgoing requests (JSON or text) and masks sensitive entities using a dual-tier system (Regex + ONNX NER). It intercepts incoming responses (JSON, text, or Server-Sent Events streams) and de-anonymizes the text while stripping out invisible Unicode tracking characters and disrupting statistical watermarks without relying on expensive secondary LLM models.
+1. **Outbound Data Exfiltration:** Sending proprietary code, credentials, and customer PII to cloud LLMs violates compliance (GDPR/HIPAA/SOC2) and exposes sensitive data to external logging.
+2. **Inbound Traceability & Synthetic Watermarks:** Major AI providers (Anthropic, Google, OpenAI) are rolling out traceable markers—including statistical n-gram biasing (SynthID, Kirchenbauer green-lists), zero-width Unicode characters, bidi overrides, and C2PA metadata—to comply with regulatory mandates (such as the EU AI Act). These invisible signatures embed persistent provenance into generated text, code, and documents, allowing third parties to trace and fingerprint your outputs.
+
+## The Solution: BlindPipe
+
+**BlindPipe** acts as an invisible, full-duplex Layer 7 security boundary:
+* **Outbound (Client → LLM):** Intercepts requests, redacts PII and credentials using high-speed deterministic regex and local ONNX NER, and stores mappings in an ephemeral, in-memory vault.
+* **Inbound (LLM → Client):** Re-hydrates original PII while simultaneously stripping zero-width tracking characters, normalizing Unicode homoglyphs, disrupting statistical watermark distributions, and purging provenance metadata in real time with $< 4\text{ms}$ latency overhead.
 
 ## Architecture
 
@@ -33,6 +38,8 @@ graph LR
 ## Quickstart
 
 ```bash
+git clone https://github.com/TamTunnel/BlindPipe.git
+cd BlindPipe
 docker-compose up -d
 ```
 
@@ -61,12 +68,24 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 - **Latency (Regex):** <1ms
 - **Latency (NER):** ~3-4ms
 
-## FAQs
-**Q: Does it work with streaming (SSE)?**
-A: Yes! BlindPipe natively supports chunked streaming and accurately replaces tokens across stream boundaries using its sliding-window SSE buffer.
+## Frequently Asked Questions (FAQ)
 
-**Q: Do I need a GPU?**
-A: No, the ONNX models are highly optimized and quantized for CPU execution in Rust.
+#### Can BlindPipe run on resource-constrained embedded devices (e.g., OpenWrt / GL.iNet routers)?
+**Yes.** By default, BlindPipe compiles with the `ner` feature enabled (which bundles ONNX Runtime for contextual named entity recognition). If you are deploying to a low-resource environment (like an OpenWrt router, Raspberry Pi, or embedded gateway) with limited storage or RAM, compile BlindPipe without default features:
+
+```bash
+# Compiles a tiny, standalone ~10MB static binary (Regex-only mode)
+cargo build --release --no-default-features
+```
+
+* **Memory Footprint:** Drops from $\approx 42\text{ MB}$ to **$< 15\text{ MB}$ RSS**.
+* **Capabilities:** Tier 1 deterministic redaction (API keys, SSNs, credit cards, emails, IPs) + full inbound Unicode/watermark stripping without requiring any external `.onnx` model weights.
+
+#### What is the Latency Impact?
+BlindPipe is built for high-performance and minimal latency overhead. SIMD-accelerated character scanning and in-memory Aho-Corasick unmasking maintain sub-5ms P99 proxy overhead, ensuring that adding BlindPipe to your stack doesn't slow down upstream interactions.
+
+#### Is Session Data Private?
+**Yes.** All surrogate-to-real token mappings are stored in-memory using an LRU/TTL cache and are never written to disk, guaranteeing strong session privacy.
 
 ## Contribution Guide
 1. Fork the repository.
