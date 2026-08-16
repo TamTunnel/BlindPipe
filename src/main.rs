@@ -165,6 +165,7 @@ async fn proxy_handler(
         });
 
         let body = Body::from_stream(tokio_stream::wrappers::ReceiverStream::new(rx));
+        Ok(resp_builder.body(body).unwrap())
     } else {
         let resp_bytes = upstream_res
             .bytes()
