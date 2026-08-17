@@ -8,18 +8,23 @@ use axum::{
 };
 use bytes::Bytes;
 use futures_util::StreamExt;
-use promptveil::config::Config;
-use promptveil::sanitizer::Sanitizer;
-use promptveil::vault::Vault;
 use reqwest::Client;
 use serde_json::Value;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use uuid::Uuid;
 
+use blindpipe::config::Config;
+use blindpipe::pipeline::inbound::{InboundPipeline, SessionInbound};
+use blindpipe::pipeline::outbound::{OutboundPipeline, SessionOutbound};
+use blindpipe::utils::json_walker::walk_json;
+use blindpipe::utils::sse_buffer::SseBuffer;
+use blindpipe::vault::Vault;
+
 #[derive(Clone)]
 struct AppState {
-    sanitizer: Arc<Sanitizer>,
+    outbound: Arc<OutboundPipeline>,
+    inbound: Arc<InboundPipeline>,
     client: Client,
     config: Arc<Config>,
 }
@@ -69,10 +74,11 @@ async fn proxy_handler(
 
     if content_type.contains("application/json") && !body_vec.is_empty() {
         if let Ok(mut json_val) = serde_json::from_slice::<Value>(&body_vec) {
-            state
-                .sanitizer
-                .walk_and_sanitize(&mut json_val, &session_id)
-                .await;
+            let processor = SessionOutbound {
+                pipeline: &state.outbound,
+                session_id: &session_id,
+            };
+            walk_json(&mut json_val, &processor).await;
             if let Ok(new_body) = serde_json::to_vec(&json_val) {
                 body_vec = new_body;
             }
@@ -112,53 +118,53 @@ async fn proxy_handler(
 
     if res_content_type.contains("text/event-stream") {
         let session_id_clone = session_id.clone();
-        let sanitizer_clone = state.sanitizer.clone();
+        let inbound_clone = state.inbound.clone();
 
-        let stream = upstream_res.bytes_stream();
-        let mapped_stream = stream.then(move |result| {
-            let session_id = session_id_clone.clone();
-            let sanitizer = sanitizer_clone.clone();
-            async move {
-                match result {
-                    Ok(bytes) => {
-                        let text = String::from_utf8_lossy(&bytes).to_string();
+        let (tx, rx) = tokio::sync::mpsc::channel::<Result<Bytes, std::convert::Infallible>>(32);
+        
+        tokio::spawn(async move {
+            let mut stream = upstream_res.bytes_stream();
+            let mut sse_buffer = SseBuffer::new();
+
+            while let Some(result) = stream.next().await {
+                if let Ok(bytes) = result {
+                    sse_buffer.extend(&bytes);
+                    while let Some(event_text) = sse_buffer.next_event() {
                         let mut final_text = String::new();
-
-                        for part in text.split("\n\n") {
-                            if part.is_empty() {
-                                continue;
-                            }
-                            if part.starts_with("data: ") {
-                                let data_str = &part[6..];
-                                if data_str.trim() == "[DONE]" {
-                                    final_text.push_str(&format!("data: {}\n\n", data_str));
-                                    continue;
-                                }
-
-                                if let Ok(mut json_val) = serde_json::from_str::<Value>(data_str) {
-                                    sanitizer
-                                        .walk_and_desanitize(&mut json_val, &session_id)
-                                        .await;
-                                    let new_data = serde_json::to_string(&json_val).unwrap();
-                                    final_text.push_str(&format!("data: {}\n\n", new_data));
-                                } else {
-                                    let desanitized =
-                                        sanitizer.vault.desanitize(&session_id, data_str).await;
-                                    final_text.push_str(&format!("data: {}\n\n", desanitized));
-                                }
+                        let part = event_text.trim_end_matches('\n');
+                        if part.starts_with("data: ") {
+                            let data_str = &part[6..];
+                            if data_str.trim() == "[DONE]" {
+                                final_text.push_str(&format!("data: {}\n\n", data_str));
+                            } else if let Ok(mut json_val) = serde_json::from_str::<Value>(data_str) {
+                                let processor = SessionInbound {
+                                    pipeline: &inbound_clone,
+                                    session_id: &session_id_clone,
+                                };
+                                walk_json(&mut json_val, &processor).await;
+                                let new_data = serde_json::to_string(&json_val).unwrap();
+                                final_text.push_str(&format!("data: {}\n\n", new_data));
                             } else {
-                                final_text.push_str(&format!("{}\n\n", part));
+                                let processor = SessionInbound {
+                                    pipeline: &inbound_clone,
+                                    session_id: &session_id_clone,
+                                };
+                                let desanitized = blindpipe::utils::json_walker::StringProcessor::process(&processor, data_str).await;
+                                final_text.push_str(&format!("data: {}\n\n", desanitized));
                             }
+                        } else if !part.is_empty() {
+                            final_text.push_str(&format!("{}\n\n", part));
                         }
-                        Ok::<_, std::convert::Infallible>(Bytes::from(final_text))
+
+                        if !final_text.is_empty() {
+                            let _ = tx.send(Ok(Bytes::from(final_text))).await;
+                        }
                     }
-                    Err(_) => Ok::<_, std::convert::Infallible>(Bytes::new()),
                 }
             }
         });
 
-        let body = Body::from_stream(mapped_stream);
-        Ok(resp_builder.body(body).unwrap())
+        let body = Body::from_stream(tokio_stream::wrappers::ReceiverStream::new(rx));
     } else {
         let resp_bytes = upstream_res
             .bytes()
@@ -168,17 +174,24 @@ async fn proxy_handler(
 
         if res_content_type.contains("application/json") && !resp_vec.is_empty() {
             if let Ok(mut json_val) = serde_json::from_slice::<Value>(&resp_vec) {
-                state
-                    .sanitizer
-                    .walk_and_desanitize(&mut json_val, &session_id)
-                    .await;
+                let processor = SessionInbound {
+                    pipeline: &state.inbound,
+                    session_id: &session_id,
+                };
+                walk_json(&mut json_val, &processor).await;
                 if let Ok(new_body) = serde_json::to_vec(&json_val) {
                     resp_vec = new_body;
                 }
             }
         } else if !resp_vec.is_empty() {
             if let Ok(text) = String::from_utf8(resp_vec.clone()) {
-                let desanitized = state.sanitizer.vault.desanitize(&session_id, &text).await;
+                use std::future::Future;
+                // Just use the pipeline manually
+                let processor = SessionInbound {
+                    pipeline: &state.inbound,
+                    session_id: &session_id,
+                };
+                let desanitized = blindpipe::utils::json_walker::StringProcessor::process(&processor, &text).await;
                 resp_vec = desanitized.into_bytes();
             }
         }
@@ -193,14 +206,17 @@ async fn main() -> anyhow::Result<()> {
 
     let config = Arc::new(Config::load());
     let vault = Arc::new(Vault::new(config.session_ttl_seconds));
-    let sanitizer = Arc::new(Sanitizer::new(vault.clone(), &config));
+    
+    let outbound = Arc::new(OutboundPipeline::new(vault.clone(), &config));
+    let inbound = Arc::new(InboundPipeline::new(vault.clone()));
 
     let client = Client::builder()
         .timeout(std::time::Duration::from_secs_f32(60.0))
         .build()?;
 
     let app_state = AppState {
-        sanitizer,
+        outbound,
+        inbound,
         client,
         config: config.clone(),
     };

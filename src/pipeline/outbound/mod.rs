@@ -2,19 +2,22 @@ pub mod ner_engine;
 pub mod regex_engine;
 
 use crate::config::Config;
+use crate::utils::json_walker::StringProcessor;
 use crate::vault::Vault;
 use ner_engine::NerEngine;
 use regex_engine::RegexEngine;
-use serde_json::Value;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 
-pub struct Sanitizer {
+pub struct OutboundPipeline {
     pub vault: Arc<Vault>,
     pub regex_engine: Option<RegexEngine>,
+    #[cfg(feature = "ner")]
     pub ner_engine: Option<NerEngine>,
 }
 
-impl Sanitizer {
+impl OutboundPipeline {
     pub fn new(vault: Arc<Vault>, config: &Config) -> Self {
         let regex_engine = if config.enable_regex_tier {
             Some(RegexEngine::new())
@@ -22,9 +25,10 @@ impl Sanitizer {
             None
         };
 
+        #[cfg(feature = "ner")]
         let ner_engine = if config.enable_ner_tier {
-            let model_dir =
-                std::env::var("GLINER_MODEL_PATH").unwrap_or_else(|_| "models".to_string());
+            let model_dir = std::env::var("BLINDPIPE_NER_MODEL_PATH")
+                .unwrap_or_else(|_| "models".to_string());
             match NerEngine::new(&model_dir, config.ner_threshold) {
                 Ok(engine) => Some(engine),
                 Err(e) => {
@@ -39,6 +43,7 @@ impl Sanitizer {
         Self {
             vault,
             regex_engine,
+            #[cfg(feature = "ner")]
             ner_engine,
         }
     }
@@ -57,6 +62,7 @@ impl Sanitizer {
             }
         }
 
+        #[cfg(feature = "ner")]
         if let Some(ner) = &self.ner_engine {
             if let Ok(entities) = ner.extract(text) {
                 for e in entities {
@@ -84,44 +90,15 @@ impl Sanitizer {
 
         result
     }
+}
 
-    pub async fn walk_and_sanitize(&self, value: &mut Value, session_id: &str) {
-        match value {
-            Value::String(s) => {
-                let sanitized = self.sanitize_text(s, session_id).await;
-                *s = sanitized;
-            }
-            Value::Array(arr) => {
-                for item in arr.iter_mut() {
-                    Box::pin(self.walk_and_sanitize(item, session_id)).await;
-                }
-            }
-            Value::Object(obj) => {
-                for (_, val) in obj.iter_mut() {
-                    Box::pin(self.walk_and_sanitize(val, session_id)).await;
-                }
-            }
-            _ => {}
-        }
-    }
+pub struct SessionOutbound<'a> {
+    pub pipeline: &'a OutboundPipeline,
+    pub session_id: &'a str,
+}
 
-    pub async fn walk_and_desanitize(&self, value: &mut Value, session_id: &str) {
-        match value {
-            Value::String(s) => {
-                let desanitized = self.vault.desanitize(session_id, s).await;
-                *s = desanitized;
-            }
-            Value::Array(arr) => {
-                for item in arr.iter_mut() {
-                    Box::pin(self.walk_and_desanitize(item, session_id)).await;
-                }
-            }
-            Value::Object(obj) => {
-                for (_, val) in obj.iter_mut() {
-                    Box::pin(self.walk_and_desanitize(val, session_id)).await;
-                }
-            }
-            _ => {}
-        }
+impl<'a> StringProcessor for SessionOutbound<'a> {
+    fn process<'b>(&'b self, s: &'b str) -> Pin<Box<dyn Future<Output = String> + Send + 'b>> {
+        Box::pin(async move { self.pipeline.sanitize_text(s, self.session_id).await })
     }
 }

@@ -1,19 +1,19 @@
 version: '3.8'
 
 services:
-  promptveil:
+  blindpipe:
     build:
       context: .
       dockerfile: Dockerfile
     ports:
       - "8080:8080"
     environment:
-      - SERVER_PORT=8080
-      - UPSTREAM_BASE_URL=https://api.openai.com
-      - ENABLE_REGEX_TIER=true
-      - ENABLE_NER_TIER=true
-      - NER_THRESHOLD=0.45
-      - SESSION_TTL_SECONDS=3600
+      - BLINDPIPE_PORT=8080
+      - BLINDPIPE_UPSTREAM_URL=https://api.openai.com
+      - BLINDPIPE_ENABLE_REGEX=true
+      - BLINDPIPE_ENABLE_NER=true
+      - BLINDPIPE_NER_THRESHOLD=0.45
+      - BLINDPIPE_SESSION_TTL=3600
       - RUST_LOG=info
     # Restrict memory as Rust uses <40MB normally
     deploy:

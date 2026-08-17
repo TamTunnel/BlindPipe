@@ -14,25 +14,27 @@ pub struct Config {
 impl Config {
     pub fn load() -> Self {
         Self {
-            server_port: env::var("SERVER_PORT")
+            server_port: env::var("BLINDPIPE_PORT")
+                .or_else(|_| env::var("PORT"))
                 .unwrap_or_else(|_| "8080".to_string())
                 .parse()
                 .unwrap_or(8080),
-            upstream_base_url: env::var("UPSTREAM_BASE_URL")
+            upstream_base_url: env::var("BLINDPIPE_UPSTREAM_URL")
+                .or_else(|_| env::var("UPSTREAM_BASE_URL"))
                 .unwrap_or_else(|_| "https://api.openai.com".to_string()),
-            ner_threshold: env::var("NER_THRESHOLD")
+            ner_threshold: env::var("BLINDPIPE_NER_THRESHOLD")
                 .unwrap_or_else(|_| "0.45".to_string())
                 .parse()
                 .unwrap_or(0.45),
-            session_ttl_seconds: env::var("SESSION_TTL_SECONDS")
+            session_ttl_seconds: env::var("BLINDPIPE_SESSION_TTL")
                 .unwrap_or_else(|_| "3600".to_string())
                 .parse()
                 .unwrap_or(3600),
-            enable_regex_tier: env::var("ENABLE_REGEX_TIER")
+            enable_regex_tier: env::var("BLINDPIPE_ENABLE_REGEX")
                 .unwrap_or_else(|_| "true".to_string())
                 .parse()
                 .unwrap_or(true),
-            enable_ner_tier: env::var("ENABLE_NER_TIER")
+            enable_ner_tier: env::var("BLINDPIPE_ENABLE_NER")
                 .unwrap_or_else(|_| "true".to_string())
                 .parse()
                 .unwrap_or(true),

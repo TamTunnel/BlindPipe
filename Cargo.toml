@@ -1,26 +1,32 @@
 [package]
-name = "promptveil"
+name = "blindpipe"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1"
 axum = "0.7"
 tower = "0.4"
 tower-http = { version = "0.5", features = ["cors", "trace"] }
 reqwest = { version = "0.12", features = ["json", "stream"] }
 bytes = "1"
 futures-util = "0.3"
-ort = { version = "2.0.0-rc.13", features = ["load-dynamic", "ndarray", "download-binaries"] }
-tokenizers = { version = "0.15", default-features = false, features = ["onig"] }
+ort = { version = "2.0.0-rc.13", features = ["load-dynamic", "ndarray", "download-binaries"], optional = true }
+tokenizers = { version = "0.15", default-features = false, features = ["onig"], optional = true }
 aho-corasick = "1.1"
 regex = "1.10"
 lazy_static = "1.4"
 moka = { version = "0.12", features = ["future"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+unicode-normalization = "0.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 anyhow = "1.0"
 thiserror = "1.0"
 uuid = { version = "1", features = ["v4", "fast-rng"] }
+
+[features]
+default = ["ner"]
+ner = ["ort", "tokenizers"]
