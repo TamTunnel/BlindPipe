@@ -21,6 +21,8 @@
 * **Outbound (Client → LLM):** Intercepts requests, redacts PII and credentials using high-speed deterministic regex and local ONNX NER, and stores mappings in an ephemeral, in-memory vault.
 * **Inbound (LLM → Client):** Re-hydrates original PII while simultaneously stripping zero-width tracking characters, normalizing Unicode homoglyphs, disrupting statistical watermark distributions, and purging provenance metadata in real time with $< 4\text{ms}$ latency overhead.
 
+* **Works Under the Hood without end-user disruption:**  Upstream providers (Anthropic, OpenAI) only see synthetic tokens (<PERSON_1>, <EMAIL_1>, <API_KEY_1>). Your real identity and secrets never hit provider servers. BlindPipe performs a reverse lookup in its in-memory session cache and swaps the surrogate tokens back to their original values before yielding text to Cursor or your terminal. On the exact same inbound pass, it strips invisible zero-width tracking bytes, tag plane characters, and C2PA metadata. The text, code, and filenames in your editor look identical to what you expect, with all names and variables intact, while remaining clean of persistent provenance markers.
+
 ## Architecture
 
 ```mermaid
