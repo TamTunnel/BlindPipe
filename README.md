@@ -129,6 +129,26 @@ curl -X POST http://localhost:8080/api/generate \
   -d '{"model": "llama3", "prompt": "My IP address is 192.168.1.100", "stream": false}'
 ```
 
+### Simultaneous Multi-Provider Routing
+
+A single BlindPipe instance can route to multiple providers concurrently without restarting:
+
+1. **Via Header Override (`x-upstream-base-url`):**
+   ```bash
+   curl http://localhost:8080/v1/chat/completions \
+     -H "x-upstream-base-url: https://openrouter.ai/api" \
+     -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{"model": "meta-llama/llama-3-8b-instruct:free", "messages": [{"role": "user", "content": "Hello!"}]}'
+   ```
+
+2. **Via Path Prefix (Ideal for IDEs like Cursor/Cline):**
+   * **OpenRouter:** `http://localhost:8080/openrouter/v1`
+   * **Anthropic:** `http://localhost:8080/anthropic/v1`
+   * **OpenAI:** `http://localhost:8080/openai/v1`
+   * **Google Gemini:** `http://localhost:8080/gemini/v1beta`
+   * **Local Ollama:** `http://localhost:8080/ollama/api`
+
 ### Inline Base64 & Multipart Verification Example
 
 ```bash

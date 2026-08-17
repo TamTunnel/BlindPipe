@@ -33,6 +33,51 @@ async fn health_check() -> impl IntoResponse {
     (StatusCode::OK, "ok")
 }
 
+pub fn resolve_upstream_target(
+    req_path: &str,
+    headers: &HeaderMap,
+    default_base_url: &str,
+) -> (String, String) {
+    // 1. Highest Priority: Explicit header override
+    if let Some(header_url) = headers
+        .get("x-upstream-base-url")
+        .and_then(|v| v.to_str().ok())
+    {
+        return (header_url.trim_end_matches('/').to_string(), req_path.to_string());
+    }
+
+    // 2. Second Priority: Path-based provider prefixes (strips prefix from downstream path)
+    let known_prefixes = [
+        ("/openrouter", "https://openrouter.ai/api"),
+        ("/anthropic", "https://api.anthropic.com"),
+        ("/openai", "https://api.openai.com"),
+        ("/gemini", "https://generativelanguage.googleapis.com"),
+        ("/ollama", "http://localhost:11434"),
+    ];
+
+    for (prefix, base_url) in known_prefixes {
+        if req_path.starts_with(prefix) {
+            let stripped_path = &req_path[prefix.len()..];
+            let clean_path = if stripped_path.is_empty() {
+                "/"
+            } else if !stripped_path.starts_with('/') && !stripped_path.starts_with('?') {
+                stripped_path
+            } else {
+                stripped_path
+            };
+            let final_path = if clean_path.starts_with('/') {
+                clean_path.to_string()
+            } else {
+                format!("/{}", clean_path)
+            };
+            return (base_url.trim_end_matches('/').to_string(), final_path);
+        }
+    }
+
+    // 3. Fallback: Default configured upstream
+    (default_base_url.trim_end_matches('/').to_string(), req_path.to_string())
+}
+
 async fn proxy_handler(
     State(state): State<AppState>,
     req: Request,
@@ -44,16 +89,16 @@ async fn proxy_handler(
         .map(|s| s.to_string())
         .unwrap_or_else(|| format!("sess_{}", Uuid::new_v4().simple()));
 
-    let path = req.uri().path().to_string();
-    let query = req.uri().query().map(|q| format!("?{}", q)).unwrap_or_default();
-    let upstream_url = format!("{}{}{}", state.config.upstream_base_url, path, query);
+    let raw_path = req.uri().path_and_query().map(|x| x.as_str()).unwrap_or("/");
+    let (upstream_base, forwarded_path) = resolve_upstream_target(raw_path, req.headers(), &state.config.upstream_base_url);
+    let upstream_url = format!("{}{}", upstream_base, forwarded_path);
 
     let method = req.method().clone();
 
-    // Extract headers (filter out hop-by-hop)
+    // Extract headers (filter out hop-by-hop and internal override headers)
     let mut headers = HeaderMap::new();
     for (k, v) in req.headers() {
-        if k != "host" && k != "content-length" {
+        if k != "host" && k != "content-length" && k != "x-upstream-base-url" {
             headers.insert(k.clone(), v.clone());
         }
     }
@@ -191,7 +236,6 @@ async fn proxy_handler(
             resp_vec = blindpipe::pipeline::inbound::metadata::MetadataStripper::strip_binary(&resp_vec, &res_content_type);
         } else if !resp_vec.is_empty() {
             if let Ok(text) = String::from_utf8(resp_vec.clone()) {
-                use std::future::Future;
                 // Just use the pipeline manually
                 let processor = SessionInbound {
                     pipeline: &state.inbound,
@@ -240,3 +284,56 @@ async fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::HeaderMap;
+
+    #[test]
+    fn test_default_fallback() {
+        let headers = HeaderMap::new();
+        let (base, path) = resolve_upstream_target("/v1/chat/completions", &headers, "https://api.openai.com");
+        assert_eq!(base, "https://api.openai.com");
+        assert_eq!(path, "/v1/chat/completions");
+    }
+
+    #[test]
+    fn test_header_override() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-upstream-base-url", "https://custom.provider.com/api/".parse().unwrap());
+        let (base, path) = resolve_upstream_target("/v1/models", &headers, "https://api.openai.com");
+        assert_eq!(base, "https://custom.provider.com/api");
+        assert_eq!(path, "/v1/models");
+    }
+
+    #[test]
+    fn test_path_prefixes() {
+        let headers = HeaderMap::new();
+        
+        let (base, path) = resolve_upstream_target("/openrouter/v1/chat/completions", &headers, "https://api.openai.com");
+        assert_eq!(base, "https://openrouter.ai/api");
+        assert_eq!(path, "/v1/chat/completions");
+
+        let (base, path) = resolve_upstream_target("/anthropic/v1/messages?beta=true", &headers, "https://api.openai.com");
+        assert_eq!(base, "https://api.anthropic.com");
+        assert_eq!(path, "/v1/messages?beta=true");
+
+        let (base, path) = resolve_upstream_target("/openai/v1/models", &headers, "https://api.openai.com");
+        assert_eq!(base, "https://api.openai.com");
+        assert_eq!(path, "/v1/models");
+
+        let (base, path) = resolve_upstream_target("/gemini/v1beta/models", &headers, "https://api.openai.com");
+        assert_eq!(base, "https://generativelanguage.googleapis.com");
+        assert_eq!(path, "/v1beta/models");
+
+        let (base, path) = resolve_upstream_target("/ollama/api/generate", &headers, "https://api.openai.com");
+        assert_eq!(base, "http://localhost:11434");
+        assert_eq!(path, "/api/generate");
+
+        let (base, path) = resolve_upstream_target("/openrouter", &headers, "https://api.openai.com");
+        assert_eq!(base, "https://openrouter.ai/api");
+        assert_eq!(path, "/");
+    }
+}
+
