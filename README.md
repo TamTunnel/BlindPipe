@@ -4,7 +4,7 @@
 [![Rust 1.80+](https://img.shields.io/badge/rust-1.80+-orange.svg)](https://www.rust-lang.org)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-> `🔒 High-performance, full-duplex Layer 7 AI privacy gateway in Rust. Redacts outbound PII/credentials and purges inbound zero-width tracking characters, SynthID watermarks, and C2PA/EXIF metadata across 13 image, document, and markup formats.`
+**BlindPipe** is a high-performance, full-duplex Layer 7 AI privacy proxy written in Rust. It enforces a bidirectional zero-trust perimeter for AI applications, ensuring that sensitive data is masked before reaching external LLMs, and responses are scrubbed of tracking/watermarks before reaching end-users. It redacts outbound PII/credentials and purges inbound zero-width tracking characters, SynthID watermarks, and C2PA/EXIF metadata across 13 image, document, and markup formats.
 
 **BlindPipe is provider agnostic and hence can work with any LLM provider with their upstream API URL.**
 
